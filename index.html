@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEA Urenregistratie</title>
+    <!-- Supabase inladen -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 25px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #004494;
+        }
+        .success-msg {
+            display: none;
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Uren Invoeren</h2>
+    <form id="urenForm">
+        <label for="chauffeur">Chauffeur</label>
+        <select id="chauffeur" required>
+            <option value="">Laden...</option>
+        </select>
+
+        <label for="datum">Datum</label>
+        <input type="date" id="datum" required>
+
+        <label for="rit">Rit Omschrijving (Optioneel)</label>
+        <input type="text" id="rit" placeholder="Bijv. Rit naar Amsterdam">
+
+        <label for="vrachtwagen">Vrachtwagen</label>
+        <select id="vrachtwagen" required>
+            <option value="">Laden...</option>
+        </select>
+
+        <label for="starttijd">Starttijd</label>
+        <input type="time" id="starttijd" required>
+
+        <label for="eindtijd">Eindtijd</label>
+        <input type="time" id="eindtijd" required>
+
+        <label for="pauze">Pauze (in minuten)</label>
+        <input type="number" id="pauze" placeholder="Bijv. 45" value="0" required>
+
+        <button type="submit">Opslaan</button>
+    </form>
+    
+    <div id="successMsg" class="success-msg">✅ Uren succesvol opgeslagen!</div>
+</div>
+
+<script>
+    // --- VUL HIER JOUW SUPABASE GEGEVENS IN ---
+    const SUPABASE_URL = 'https://lmclewyqceztcsvqkoaf.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_gv68Kwlf5w0P8bry7hMBaw_SrE_sAjS';
+    // ------------------------------------------
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Zet datum standaard op vandaag
+    document.getElementById('datum').valueAsDate = new Date();
+
+    // Functie om weeknummer te berekenen
+    function getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+        var weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+        return weekNo;
+    }
+
+    // Haal chauffeurs en vrachtwagens op uit de database
+    async function laadData() {
+        const { data: chauffeurs } = await supabase.from('chauffeurs').select('*');
+        const { data: vrachtwagens } = await supabase.from('vrachtwagens').select('*');
+
+        const chauffeurSelect = document.getElementById('chauffeur');
+        chauffeurSelect.innerHTML = '<option value="">Kies een chauffeur...</option>';
+        chauffeurs.forEach(c => {
+            chauffeurSelect.innerHTML += `<option value="${c.id}">${c.naam}</option>`;
+        });
+
+        const vrachtwagenSelect = document.getElementById('vrachtwagen');
+        vrachtwagenSelect.innerHTML = '<option value="">Kies een vrachtwagen...</option>';
+        vrachtwagens.forEach(v => {
+            vrachtwagenSelect.innerHTML += `<option value="${v.id}">${v.kenteken} (${v.eigenaar})</option>`;
+        });
+    }
+
+    // Formulier versturen
+    document.getElementById('urenForm').addEventListener('submit', async function(e) {
+        e.preventDefault(); // Voorkom dat de pagina herlaadt
+
+        const datum = document.getElementById('datum').value;
+        const weeknummer = getWeekNumber(new Date(datum));
+        
+        const ritData = {
+            datum: datum,
+            weeknummer: weeknummer,
+            chauffeur_id: document.getElementById('chauffeur').value,
+            vrachtwagen_id: document.getElementById('vrachtwagen').value,
+            rit_omschrijving: document.getElementById('rit').value,
+            starttijd: document.getElementById('starttijd').value,
+            eindtijd: document.getElementById('eindtijd').value,
+            pauze_minuten: document.getElementById('pauze').value
+        };
+
+        const { error } = await supabase.from('urenregistratie').insert([ritData]);
+
+        if (error) {
+            alert("Er is iets misgegaan: " + error.message);
+        } else {
+            document.getElementById('successMsg').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('successMsg').style.display = 'none';
+                document.getElementById('urenForm').reset();
+                document.getElementById('datum').valueAsDate = new Date();
+            }, 3000);
+        }
+    });
+
+    // Start laden als pagina opent
+    laadData();
+</script>
+
+</body>
+</html>
